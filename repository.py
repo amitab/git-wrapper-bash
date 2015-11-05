@@ -24,6 +24,7 @@ class Repository:
             self.type = self.branch_data[3]
             
     def __init__(self):
+        db_path = os.path.dirname(os.path.realpath(__file__))
         self.bug_regex = re.compile('.*[bB][uU][gG].*')
         self.wl_regex = re.compile('.*[wW][lL].*')
         
@@ -31,7 +32,7 @@ class Repository:
         self.repo_path = self.execute_cmd(['git', 'rev-parse', '--show-toplevel'])
         self.repo_name = self.repo_path.split('/')[-1]
         
-        self.conn = sqlite3.connect(self.repo_name + '.db')
+        self.conn = sqlite3.connect(db_path + '/' + self.repo_name + '.db')
         self.conn.execute('''CREATE TABLE IF NOT EXISTS branch (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             NAME CHAR(50),
