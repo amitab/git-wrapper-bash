@@ -5,23 +5,13 @@ import sqlite3
 
 class Repository:
     def execute_cmd(self, cmd):
-        cmd = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        return cmd.communicate()[0].strip()
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        return process.communicate()[0].strip()
         
     def new_subprocess(self, cmd):
         cmd = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         cmd.wait()
         return cmd
-            
-    def load_curr_branch_details(self):
-        self.branch_data = self.fetch_branch(self.current_branch)
-        if not self.branch_data:
-            self.calc_current_branch()
-            if not self.is_on_remote_branch():
-                self.register_branch(self.current_branch, self.type)
-        else:
-            self.last_remote_commit = self.branch_data[2]
-            self.type = self.branch_data[3]
             
     def __init__(self):
         db_path = os.path.dirname(os.path.realpath(__file__))
@@ -37,13 +27,25 @@ class Repository:
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             NAME CHAR(50),
             LAST_REMOTE_COMMIT CHAR(50),
-            TYPE CHAR(10)
+            TYPE CHAR(10),
+            PARENT CHAR(50)
         );''')
         
         self.conn.commit()
         self.load_curr_branch_details()
     
     # ALL BRANCH FUNCTIONALITY
+    def load_curr_branch_details(self):
+        self.branch_data = self.fetch_branch(self.current_branch)
+        if not self.branch_data:
+            self.calc_current_branch()
+            if not self.is_on_remote_branch():
+                self.register_branch(self.current_branch, self.type, self.parent)
+        else:
+            self.last_remote_commit = self.branch_data[2]
+            self.type = self.branch_data[3]
+            self.parent = self.branch_data[4]
+
     def fetch_branch(self, branch):
         stmt = 'SELECT * FROM branch WHERE NAME = ?'
         cursor = self.conn.execute(stmt, (branch,))
@@ -52,7 +54,6 @@ class Repository:
     def calc_current_branch(self):
         self.current_branch = self.execute_cmd(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
         self.last_remote_commit = self.execute_cmd(['git', 'reflog', 'show', '--pretty=format:%H', self.current_branch]).split('\n')[-1]
-        #branches = self.execute_cmd(['git', 'branch', '--contains', self.last_remote_commit]).split('/n')
         
         if self.bug_regex.match(self.current_branch):
             self.type = 'b'
@@ -60,11 +61,13 @@ class Repository:
             self.type = 'w'
         else:
             self.type = '?'
+            
+        self.parent = '?' # How do we get parent of a branch?
         
-    def register_branch(self, branch, type):
+    def register_branch(self, branch, type, parent):
         print "Registering branch " + branch
-        stmt = 'INSERT INTO branch (NAME, LAST_REMOTE_COMMIT, TYPE) VALUES(?, ?, ?)'
-        self.conn.execute(stmt, (branch, self.last_remote_commit, type,))
+        stmt = 'INSERT INTO branch (NAME, LAST_REMOTE_COMMIT, TYPE, PARENT) VALUES(?, ?, ?, ?)'
+        self.conn.execute(stmt, (branch, self.last_remote_commit, type, parent,))
         self.conn.commit()
         
     def unregister_branch(self, branch, type):
@@ -73,11 +76,11 @@ class Repository:
         self.conn.execute(stmt, (branch, type,))
         self.conn.commit()
             
-    def new_branch(self, data, type):
-        print "Creating new branch " + data[0] + " from " + self.current_branch
+    def new_branch(self, data):
+        print "Creating new branch " + data[0] + " from " + data[2]
         status = subprocess.call("git checkout -b " + data[0], shell=True)
         if status == 0:
-            self.register_branch(data[0], type)
+            self.register_branch(data[0], data[1], data[2])
             print "Success"
         else:
             print "ERROR creating new " + "Bug" if type == "B" else "Worklog" +"!"
@@ -92,7 +95,7 @@ class Repository:
         
     def list_branches(self, type):
         cmd = ['git', 'branch', '--list']
-        if type == 'B':
+        if type == 'b':
             cmd.append('*[Bb][uU][gG]*')
         else:
             cmd.append('*[Ww][Ll]*')
@@ -157,6 +160,8 @@ class Repository:
         self.delete_branch(data, 'w')
         
     def new_worklog(self, data):
+        data.append('w')
+
         if len(data) == 2:
             parent = data[1]
             if not self.is_remote_branch(parent):
@@ -167,9 +172,11 @@ class Repository:
             if process.returncode != 0:
                 print parent + " does not exist!"
             else:
-                self.new_branch(data, 'w')
+                data.append(parent)
+                self.new_branch(data)
         elif self.is_on_remote_branch():
-            self.new_branch(data, 'w')
+            data.append(self.current_branch)
+            self.new_branch(data)
         else:
             print "Cannot be on local branch to create new Worklog!"
         
@@ -182,6 +189,8 @@ class Repository:
         self.delete_branch(data, 'b')
         
     def new_bug(self, data):
+        data.append('b')
+
         if len(data) == 2:
             parent = data[1]
             if not self.is_remote_branch(parent):
@@ -192,9 +201,11 @@ class Repository:
             if process.returncode != 0:
                 print parent + " does not exist!"
             else:
-                self.new_branch(data, 'b')
+                data.append(parent)
+                self.new_branch(data)
         elif self.is_on_remote_branch():
-            self.new_branch(data, 'b')
+            data.append(self.current_branch)
+            self.new_branch(data)
         else:
             print "Cannot be on local branch to create new Bug!"
     
