@@ -13,10 +13,8 @@ function __g() {
 	"bug" | "wl")
 		COMPREPLY=( $(compgen -W "new delete list" -- $cur) )
 	;;
-	"delete")
-    if [ "${COMP_WORDS[COMP_CWORD-2]}" == "bug" ]; then
-      COMPREPLY=( $(compgen -W "$(git branch | grep $__bug_regex | cut -c2-)" -- $cur) )
-    fi
+	"delete" | "checkout")
+    COMPREPLY=( $(compgen -W "$(git branch | cut -c2-)" -- $cur) )
 	;;
 	*)
   ;;
