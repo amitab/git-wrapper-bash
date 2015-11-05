@@ -20,15 +20,14 @@ class Repository:
             WORK_BRANCH CHAR(50),
             DESC CHAR(50),
             TYPE CHAR(1),
-            LAST_REMOTE_COMMIT CHAR(50),
-            PARENT_BRANCH CHAR(50)
+            LAST_REMOTE_COMMIT CHAR(50)
         )''')
         
         sha1 = hashlib.sha1()
         sha1.update(self.repo_path + ' ' + str(os.stat(self.repo_path).st_ctime))
         self.repo_hash = sha1.hexdigest()
         
-        self.last_remote_commit = self.execute_cmd(['git', 'log', '--remotes', '-1', '--pretty=format:%H'])
+        self.last_remote_commit = self.execute_cmd(['git', 'reflog', 'show', '--pretty=format:%H', self.current_branch]).split('\n')[-1]
         self.load_branches()
         
     def load_branches(self):
@@ -39,15 +38,14 @@ class Repository:
                 'curr_branch': row[1],
                 'desc': row[2],
                 'type': row[3],
-                'last_remote_commit': row[4],
-                'parent_branch': row[5]
+                'last_remote_commit': row[4]
             }
             
     def new_branch(self, data, type):
-        stmt = 'INSERT INTO branch(WORK_BRANCH, DESC, TYPE, LAST_REMOTE_COMMIT, PARENT_BRANCH) VALUES(?, ?, ?, ?, ?)'
+        stmt = 'INSERT INTO branch(WORK_BRANCH, DESC, TYPE, LAST_REMOTE_COMMIT) VALUES(?, ?, ?, ?)'
         status = subprocess.call("git checkout -b " + data[0], shell=True)
         if status == 0:
-            self.conn.execute(stmt, (data[0], data[1] if len(data) == 2 else "", type, self.last_remote_commit, self.current_branch))
+            self.conn.execute(stmt, (data[0], data[1] if len(data) == 2 else "", type, self.last_remote_commit))
             self.conn.commit()
         else:
             print "ERROR creating new " + "Bug" if type == "B" else "Worklog" +"!"
@@ -76,15 +74,17 @@ class Repository:
         subprocess.call(cmd)
 
     def diff(self, data):
-        branch = self.branches[self.current_branch]
-        print branch
-        if self.current_branch in self.branches.keys():
-            branch = self.branches[self.current_branch]
-            print branch
-            cmd = ['git', 'diff', branch['last_remote_commit'] + '..']
-            subprocess.call(cmd)
-        else:
-            print "Branch not a Bug or a Worklog!"
+        cmd = ['git', 'diff', self.last_remote_commit + '..']
+        subprocess.call(cmd)
+        # branch = self.branches[self.current_branch]
+        # print branch
+        # if self.current_branch in self.branches.keys():
+        #     branch = self.branches[self.current_branch]
+        #     print branch
+        #     cmd = ['git', 'diff', branch['last_remote_commit'] + '..']
+        #     subprocess.call(cmd)
+        # else:
+        #     print "Branch not a Bug or a Worklog!"
         
     # WORKLOG FUNCTIONS:
     
