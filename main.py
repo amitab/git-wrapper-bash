@@ -1,6 +1,5 @@
 import os
 import sys
-import sqlite3
 import subprocess
 from repository import Repository
 
@@ -16,18 +15,6 @@ if status != 0:
     exit()
 
 repo = Repository()
-
-# MANAGE MAIN REPOS DATABASE
-conn = sqlite3.connect('repos.db')
-
-conn.execute('''CREATE TABLE IF NOT EXISTS repo (
-    ID INTEGER PRIMARY KEY AUTOINCREMENT,
-    REPO CHAR(50),
-    REPO_PATH CHAR(50),
-    REPO_HASH CHAR(50)
-)''')
-
-conn.close()
 
 bug_options = {
     'new': repo.new_bug,
