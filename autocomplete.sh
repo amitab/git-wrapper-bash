@@ -8,17 +8,12 @@ function __g() {
 
 	case "$prev" in
 	"g")
-		COMPREPLY=( $(compgen -W "diff patch bug wl update undo-update changes parent" -- $cur) )
+		COMPREPLY=( $(compgen -W "checkout diff parent patch changes bug wl" -- $cur) )
 	;;
 	"bug" | "wl")
-		COMPREPLY=( $(compgen -W "new delete checkout list edit-description show-description" -- $cur) )
+		COMPREPLY=( $(compgen -W "new delete list" -- $cur) )
 	;;
-	"checkout" | "delete")
-    if [ "${COMP_WORDS[COMP_CWORD-2]}" == "bug" ]; then
-      COMPREPLY=( $(compgen -W "$(git branch | grep $__bug_regex | cut -c2-)" -- $cur) )
-    fi
-	;;
-	"edit-description")
+	"delete")
     if [ "${COMP_WORDS[COMP_CWORD-2]}" == "bug" ]; then
       COMPREPLY=( $(compgen -W "$(git branch | grep $__bug_regex | cut -c2-)" -- $cur) )
     fi
