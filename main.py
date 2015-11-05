@@ -1,13 +1,6 @@
-import os
 import sys
 import subprocess
 from repository import Repository
-
-# print 'Number of arguments:', len(sys.argv), 'arguments.'
-# print 'Argument List:', str(sys.argv)
-
-# main_options = ['parent', 'diff', 'patch', 'bug', 'wl', 'changes']
-# bug_options = ['new', 'delete', 'checkout', 'list', 'edit-description', 'show-description']
 
 status = subprocess.call(["git", "status"], stdout=subprocess.PIPE)
 if status != 0:
@@ -30,7 +23,10 @@ worklog_options = {
 
 main_options = {
     'checkout': repo.checkout,
-    'diff': repo.diff
+    'diff': repo.diff,
+    'patch': repo.patch,
+    'parent': repo.parent,
+    'changes': repo.changes
 }
 
 if(sys.argv[1] == 'bug'):

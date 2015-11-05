@@ -1,4 +1,5 @@
 import re
+import os
 import subprocess
 
 class Repository:
@@ -60,6 +61,33 @@ class Repository:
     def diff(self, data):
         cmd = ['git', 'diff', self.last_remote_commit + '..']
         subprocess.call(cmd)
+        
+    def parent(self, data):
+        print self.last_remote_commit
+
+    def patch(self, data):
+        cmd = ['git', 'diff', self.last_remote_commit + '..']
+        diff = self.execute_cmd(cmd)
+        
+        try:
+            patch_dir = self.repo_path + '/patches'
+            patch_file = patch_dir + '/' + self.current_branch.split('/')[-1] + '.diff'
+            if not os.path.exists(patch_dir):
+                os.makedirs(patch_dir)
+            
+            file = open(patch_file, 'w+')
+            file.write(diff)
+        except:
+            print "Error creating patch"
+            
+        print "Patch created at: " + patch_file
+        
+    def changes(self, data):
+        cmd = ['git', 'diff', '--name-status', self.last_remote_commit + '..']
+        changes = self.execute_cmd(cmd)
+        
+        for change in sorted(changes.split('/n')):
+            print change
         
     # WORKLOG FUNCTIONS:
     
