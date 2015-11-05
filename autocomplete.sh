@@ -4,12 +4,13 @@ function __g() {
 	local cur=${COMP_WORDS[COMP_CWORD]}
 	local prev=${COMP_WORDS[COMP_CWORD-1]}
 	local __bug_regex="[bB][uU][gG]#\?"
+  local __wl_regex="[wW][lL]#\?"
 
 	case "$prev" in
 	"g")
-		COMPREPLY=( $(compgen -W "diff patch bug update undo-update changes parent" -- $cur) )
+		COMPREPLY=( $(compgen -W "diff patch bug wl update undo-update changes parent" -- $cur) )
 	;;
-	"bug")
+	"bug" | "wl")
 		COMPREPLY=( $(compgen -W "new delete checkout list edit-description show-description" -- $cur) )
 	;;
 	"checkout" | "delete")

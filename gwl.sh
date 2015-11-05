@@ -1,9 +1,9 @@
 #!/bin/sh
 
-function __gbug() {
+function __gwl() {
   curr_branch=$(git rev-parse --abbrev-ref HEAD)
   parent_branch=$(git show-branch -a 2>/dev/null | grep '\*' | grep -v "$curr_branch" | head -n1 | sed 's/.*\[\(.*\)\].*/\1/' | sed 's/[\^~].*//')
-  local __bug_regex="[bB][uU][gG]#\?"
+  local __wl_regex="[wW][lL]#\?"
 
   case "$1" in
     "new")
@@ -11,7 +11,7 @@ function __gbug() {
       if [ "$2" != "" ]; then
         git checkout -b "$2" 2>/dev/null
         if [ $? -ne 0 ]; then
-          echo "Bug $2 is alive!"
+          echo "WL $2 is alive!"
           git checkout "$2"
         else
           if [ "$3" != "" ]; then
@@ -19,35 +19,35 @@ function __gbug() {
           fi
         fi
       else
-        echo "Usage g bug new [branch]"
+        echo "Usage g wl new [branch]"
       fi
     ;;
     "delete")
       if [ "$2" != "" ]; then
         git checkout -d "$2" 2>/dev/null
         if [ $? -ne 0 ]; then
-          echo "Bug $2 not found!"
+          echo "wl $2 not found!"
           git checkout "$2"
         else
-          echo "Bug $2 squashed!"
+          echo "wl $2 squashed!"
         fi
       else
-        echo "Usage g bug delete [branch]"
+        echo "Usage g wl delete [branch]"
       fi
     ;;
     "checkout")
       if [ "$2" != "" ]; then
   			git checkout "$2"
   		else
-  			echo "Usage g bug checkout [branch]"
+  			echo "Usage g wl checkout [branch]"
   		fi
     ;;
     "list")
-      bugs=($(git branch | grep $__bug_regex | cut -c2-))
-  		for bug in "${bugs[@]}"; do
-  			num=$(grep -o "[0-9]\+$" <<< $bug)
-  			desc=$(git config branch.$bug.description)
-  			echo "BUG#$num: $desc"
+      wls=($(git branch | grep $__wl_regex | cut -c2-))
+  		for wl in "${wls[@]}"; do
+  			num=$(grep -o "[0-9]\+$" <<< $wl)
+  			desc=$(git config branch.$wl.description)
+  			echo "wl#$num: $desc"
   		done
     ;;
     "edit-description")
