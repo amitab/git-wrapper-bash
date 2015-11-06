@@ -61,7 +61,8 @@ class Repository:
             self.type = 'w'
         else:
             self.type = '?'
-            
+        
+        # git show-branch -a 2>/dev/null | grep '\*' | grep -v issues/BUG22134596 | head -n1 | sed 's/.*\[\(.*\)\].*/\1/' | sed 's/[\^~].*//'
         self.parent = '?' # How do we get parent of a branch?
         
     def register_branch(self, branch, type, parent):
