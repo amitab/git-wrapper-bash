@@ -15,7 +15,9 @@ class BranchTree:
             '--all', '--first-parent']).communicate()[0].strip()
             
         self.branch_tree = self.branch_tree.split('\n')
-        self.decipher_tree()
+        data = self.build_db()
+        self.refs = data[0]
+        self.commit_map = data[1]
             
     def find_line_level(self, line):    
         level = 1
@@ -35,19 +37,33 @@ class BranchTree:
                 level = level + 1
         return level
     
-    def decipher_tree(self):
+    def build_db(self):
         refs = {}
         convergence = []
         orphans = []
-        
-        for b in self.branch_tree:
+
+        branches = {}
+        commit_map = {}
+
+        for index, b in enumerate(self.branch_tree):
             commit_index = b.find('*')
             converge_index = b.find('/')
             hash_match = re.search('\[(.*)\]', b)
             ref_match = re.search('\((.*)\)', b)
             level = self.find_line_level(b)
-            
+
+            if not level in branches:
+                branches[level] = []
+            if ref_match:
+                branches[level].append({
+                    'ref_name': ref_match.groups()[0],
+                    'commits': []
+                })
+
             if commit_index >= 0:
+                for branch in branches[level]:
+                    branch['commits'].append(hash_match.groups()[0])
+                    
                 i = 0
                 while i < (len(orphans)):
                     orphan = orphans[i]
@@ -96,6 +112,10 @@ class BranchTree:
                 }
                 
             elif converge_index > 0 and len(convergence) > 0:
+                if  self.branch_tree[index - 1].find('/') == -1:
+                    for branch in branches[self.converge_to_level(b) + 1]:
+                        commit_map[branch['ref_name']] = branch['commits']
+                    del branches[self.converge_to_level(b) + 1][:]
                 common_refs_level = refs[convergence[-1]['ref']]['level']
                 for converge in convergence:
                     if b.find('|') == -1:
@@ -104,12 +124,14 @@ class BranchTree:
                         converge['converge_to'] = self.converge_to_level(b)
                         #print "Found convergence: " + converge['ref'] + " to " + str(self.converge_to_level(b))
         
-        #print "\n\n"
-                
-        #print refs
-        #print convergence
-        #print orphans
+        # Finally add the last ref's commits
+        commit_map[branches[1][0]['ref_name']] = branches[1][0]['commits']
+        
         for ref_name in refs:
             print refs[ref_name]['name'] + ' -> ' + str(refs[ref_name]['parent_commit_hash'])
+        
+        return (refs, commit_map)
             
 b = BranchTree()
+# print b.commit_map
+# print b.refs
