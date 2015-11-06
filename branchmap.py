@@ -52,7 +52,7 @@ class BranchTree:
                 while i < (len(orphans)):
                     orphan = orphans[i]
                     if orphan['converge_to'] == level:
-                        print "Found Orphan " + orphan['ref'] + " to converge to " + str(level) + " : " + hash_match.groups()[0]
+                        #print "Found Orphan " + orphan['ref'] + " to converge to " + str(level) + " : " + hash_match.groups()[0]
                         refs[orphan['ref']]['converge_to'] = level
                         refs[orphan['ref']]['found_converge'] = True
                         refs[orphan['ref']]['parent_commit_hash'] = hash_match.groups()[0]
@@ -65,12 +65,12 @@ class BranchTree:
                     converge = convergence[i]
                     if converge['converge_to'] != None:
                         if level == converge['converge_to']:
-                            print "Found waiting convergence " + converge['ref'] + " to converge to " + str(level) + " : " + hash_match.groups()[0]
+                            #print "Found waiting convergence " + converge['ref'] + " to converge to " + str(level) + " : " + hash_match.groups()[0]
                             refs[converge['ref']]['converge_to'] = level
                             refs[converge['ref']]['found_converge'] = True
                             refs[converge['ref']]['parent_commit_hash'] = hash_match.groups()[0]
                         else:
-                            print "Found waiting convergence " + converge['ref'] + " orphaned"
+                            #print "Found waiting convergence " + converge['ref'] + " orphaned"
                             orphans.append(converge)
                         
                         convergence.remove(converge)
@@ -79,7 +79,7 @@ class BranchTree:
             
             if ref_match:
                 ref_name = ref_match.groups()[0]
-                print "New ref: " + ref_name
+                #print "New ref: " + ref_name
                 convergence.append({
                     'ref': ref_name,
                     'converge_to': None
@@ -96,13 +96,20 @@ class BranchTree:
                 }
                 
             elif converge_index > 0 and len(convergence) > 0:
-                convergence[-1]['converge_to'] = self.converge_to_level(b)
-                print "Found convergence: " + convergence[-1]['ref'] + " to " + str(self.converge_to_level(b))
+                common_refs_level = refs[convergence[-1]['ref']]['level']
+                for converge in convergence:
+                    if b.find('|') == -1:
+                        refs[converge['ref']]['level'] = refs[converge['ref']]['level'] - 1
+                    elif refs[converge['ref']]['level'] == common_refs_level:
+                        converge['converge_to'] = self.converge_to_level(b)
+                        #print "Found convergence: " + converge['ref'] + " to " + str(self.converge_to_level(b))
         
-        print "\n\n"
+        #print "\n\n"
                 
-        print refs
-        print convergence
-        print orphans
+        #print refs
+        #print convergence
+        #print orphans
+        for ref_name in refs:
+            print refs[ref_name]['name'] + ' -> ' + str(refs[ref_name]['parent_commit_hash'])
             
 b = BranchTree()
