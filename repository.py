@@ -170,6 +170,10 @@ class Repository:
             cmd = ['git', 'diff', self.last_remote_commit + '..']
         diff = self.execute_cmd(cmd)
         
+        if diff == "":
+            print "No Diff Bruh"
+            return;
+        
         try:
             patch_dir = self.repo_path + '/patches'
             patch_file = patch_dir + '/' + self.current_branch.split('/')[-1] + '.diff'
