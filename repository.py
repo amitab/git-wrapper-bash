@@ -151,7 +151,7 @@ class Repository:
     def checkout(self, data):
         cmd = ['git', 'checkout', data[0]]
         subprocess.call(cmd)
-        self.load_curr_branch_details()
+        self.load_current_branch()
 
     def diff(self, data):
         if not self.last_remote_commit:
