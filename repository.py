@@ -1,7 +1,10 @@
 import re
 import os
+import git
 import subprocess
 import sqlite3
+
+from git_map import GitMap
 
 class Repository:
     def execute_cmd(self, cmd):
@@ -14,61 +17,88 @@ class Repository:
         return cmd
             
     def __init__(self):
-        db_path = os.path.dirname(os.path.realpath(__file__))
+        db_dir = os.getcwd()
+        self.repo = git.Repo(db_dir)
+        
+        self.repo_path = self.repo.working_dir
+        self.repo_name = self.repo.working_dir.split('/')[-1]
+        self.current_branch = self.repo.head.ref.name
+        
+        db_file_path = self.repo_path + '/' + self.repo_name + '.db'
+        
+        if not os.path.isfile(db_file_path):
+            self.new_repo = True
+        else:
+            self.new_repo = False
+        
         self.bug_regex = re.compile('.*[bB][uU][gG].*')
         self.wl_regex = re.compile('.*[wW][lL].*')
         
-        self.current_branch = self.execute_cmd(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
-        self.repo_path = self.execute_cmd(['git', 'rev-parse', '--show-toplevel'])
-        self.repo_name = self.repo_path.split('/')[-1]
-        
-        self.conn = sqlite3.connect(db_path + '/' + self.repo_name + '.db')
+        self.conn = sqlite3.connect(db_file_path)
+    
         self.conn.execute('''CREATE TABLE IF NOT EXISTS branch (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             NAME CHAR(50),
             LAST_REMOTE_COMMIT CHAR(50),
             TYPE CHAR(10),
-            PARENT CHAR(50)
+            UNIQUE(NAME)
         );''')
         
         self.conn.commit()
+        
+        self.git_map = GitMap()
+        if self.new_repo:
+            self.build_branch_map()
+        
         self.load_curr_branch_details()
+        
+    def build_branch_map(self):
+        for ref in self.git_map.refs:
+            name = ref['ref'].name
+            last_remote_commit = ref['fork']
+            if self.bug_regex.match(self.current_branch):
+                type = 'b'
+            elif self.wl_regex.match(self.current_branch):
+                type = 'w'
+            else:
+                type = '?'
+            
+            self.register_branch(name, type, last_remote_commit)
     
     # ALL BRANCH FUNCTIONALITY
     def load_curr_branch_details(self):
         self.branch_data = self.fetch_branch(self.current_branch)
         if not self.branch_data:
-            self.calc_current_branch()
+            print "Did not find Branch Details in DB"
+            data = self.find_branch_details(self.current_branch)
             if not self.is_on_remote_branch():
-                self.register_branch(self.current_branch, self.type, self.parent)
+                self.register_branch(data[0], data[1], data[2])
         else:
+            print "Found Branch Details in DB"
             self.last_remote_commit = self.branch_data[2]
             self.type = self.branch_data[3]
-            self.parent = self.branch_data[4]
 
     def fetch_branch(self, branch):
         stmt = 'SELECT * FROM branch WHERE NAME = ?'
         cursor = self.conn.execute(stmt, (branch,))
         return cursor.fetchone()
         
-    def calc_current_branch(self):
-        self.current_branch = self.execute_cmd(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
-        self.last_remote_commit = self.execute_cmd(['git', 'reflog', 'show', '--pretty=format:%H', self.current_branch]).split('\n')[-1]
-        
+    def find_branch_details(self, ref_name):
+        ref = next( (x for x in self.git_map.refs if x['ref'].name == ref_name), None)
+        last_remote_commit = ref['fork']
         if self.bug_regex.match(self.current_branch):
-            self.type = 'b'
+            type = 'b'
         elif self.wl_regex.match(self.current_branch):
-            self.type = 'w'
+            type = 'w'
         else:
-            self.type = '?'
+            type = '?'
         
-        # git show-branch -a 2>/dev/null | grep '\*' | grep -v issues/BUG22134596 | head -n1 | sed 's/.*\[\(.*\)\].*/\1/' | sed 's/[\^~].*//'
-        self.parent = '?' # How do we get parent of a branch?
+        return (ref_name, type, last_remote_commit)
         
-    def register_branch(self, branch, type, parent):
+    def register_branch(self, branch, type, last_remote_commit):
         print "Registering branch " + branch
-        stmt = 'INSERT INTO branch (NAME, LAST_REMOTE_COMMIT, TYPE, PARENT) VALUES(?, ?, ?, ?)'
-        self.conn.execute(stmt, (branch, self.last_remote_commit, type, parent,))
+        stmt = 'INSERT OR IGNORE INTO branch (NAME, LAST_REMOTE_COMMIT, TYPE) VALUES(?, ?, ?)'
+        self.conn.execute(stmt, (branch, last_remote_commit, type,))
         self.conn.commit()
         
     def unregister_branch(self, branch, type):
@@ -81,7 +111,7 @@ class Repository:
         print "Creating new branch " + data[0] + " from " + data[2]
         status = subprocess.call("git checkout -b " + data[0], shell=True)
         if status == 0:
-            self.register_branch(data[0], data[1], data[2])
+            self.register_branch(data[0], data[1], self.last_remote_commit)
             print "Success"
         else:
             print "ERROR creating new " + "Bug" if type == "B" else "Worklog" +"!"
@@ -173,10 +203,8 @@ class Repository:
             if process.returncode != 0:
                 print parent + " does not exist!"
             else:
-                data.append(parent)
                 self.new_branch(data)
         elif self.is_on_remote_branch():
-            data.append(self.current_branch)
             self.new_branch(data)
         else:
             print "Cannot be on local branch to create new Worklog!"
@@ -202,10 +230,8 @@ class Repository:
             if process.returncode != 0:
                 print parent + " does not exist!"
             else:
-                data.append(parent)
                 self.new_branch(data)
         elif self.is_on_remote_branch():
-            data.append(self.current_branch)
             self.new_branch(data)
         else:
             print "Cannot be on local branch to create new Bug!"
