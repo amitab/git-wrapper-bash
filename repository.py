@@ -164,7 +164,10 @@ class Repository:
         print self.last_remote_commit
 
     def patch(self, data):
-        cmd = ['git', 'diff', self.last_remote_commit + '..']
+        if not self.last_remote_commit:
+            cmd = ['git', 'diff']
+        else:
+            cmd = ['git', 'diff', self.last_remote_commit + '..']
         diff = self.execute_cmd(cmd)
         
         try:
