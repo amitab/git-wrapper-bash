@@ -24,7 +24,7 @@ class Repository:
 
         self.repo_path = self.repo.working_dir
         self.repo_name = self.repo.working_dir.split('/')[-1]
-        self.db_file_path = self.repo_path + '/' + self.repo_name + '.db'
+        self.db_file_path = os.path.dirname(os.path.realpath(__file__)) + '/' + self.repo_name + '.db'
 
         if not os.path.isfile(self.db_file_path):
             self.git_map = GitMap()
@@ -45,6 +45,22 @@ class Repository:
 
         self.conn.commit()
         self.load_current_branch()
+        
+        if new_repo:
+            self.setup_repo_db()
+            
+    def setup_repo_db(self):
+        for ref in self.git_map.refs:
+            name = ref['ref'].name
+            data = self.calculate_branch_details(name)
+            
+            self.register_branch(name, data['type'], data['last_remote_commit'])
+            
+    def clean_cache(self):
+        try:
+            os.remove(self.db_file_path)
+        except:
+            print "Unable to clean cache. Plox delete manually: " + self.db_file_path
 
     def calculate_branch_details(self, branch):
         if not self.git_map:
@@ -206,7 +222,11 @@ class Repository:
         
         for change in sorted(changes.split('/n')):
             print change
-        
+    
+    def clean(self, data):
+        self.conn.close()
+        self.clean_cache()
+
     # WORKLOG FUNCTIONS:
     def list_worklogs(self, data):
         self.list_branches('w')

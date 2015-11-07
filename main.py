@@ -26,7 +26,8 @@ main_options = {
     'diff': repo.diff,
     'patch': repo.patch,
     'parent': repo.parent,
-    'changes': repo.changes
+    'changes': repo.changes,
+    'clean': repo.clean
 }
 
 if(sys.argv[1] == 'bug'):
