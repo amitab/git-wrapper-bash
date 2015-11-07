@@ -17,6 +17,9 @@ function __g() {
     COMPREPLY=( $(compgen -W "$(git branch | cut -c2-)" -- $cur) )
 	;;
 	*)
+		if [ "${COMP_WORDS[COMP_CWORD-2]}" == "new" ]; then
+			COMPREPLY=( $(compgen -W "$(git branch | cut -c2-)" -- $cur) )
+		fi
   ;;
 	esac
 

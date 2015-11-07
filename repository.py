@@ -106,25 +106,31 @@ class Repository:
         self.branch_type = data['type']
         self.last_remote_commit = data['last_remote_commit']
 
-    def new_branch(self, new_branch, parent_branch = None):
+    def new_branch(self, new_branch, type, parent_branch = None):
         if not parent_branch:
             parent_branch = self.current_branch
+        else:
+            self.checkout_to_branch(parent_branch)
 
         print "Creating new branch " + new_branch + " from " + parent_branch
-        status = subprocess.call("git checkout -b " + data[0], shell=True)
+        status = subprocess.call("git checkout -b " + new_branch, shell=True)
         if status == 0:
-            self.register_branch(data[0], data[1], self.last_remote_commit)
+            self.register_branch(new_branch, type, self.repo.head.ref.commit.hexsha)
+            self.load_current_branch()
             print "Success"
         else:
             print "ERROR creating new " + "Bug" if type == "B" else "Worklog" +"!"
 
-    def delete_branch(self, data, type):
-        status = subprocess.call("git branch -d " + data[0], shell=True)
+    def delete_branch(self, branch, type):
+        if self.current_branch == branch:
+            self.checkout_to_branch('master')
+        
+        status = subprocess.call("git branch -D " + branch, shell=True)
         if status == 0:
-            self.unregister_branch(data[0], type)
+            self.unregister_branch(branch, type)
             print "Success"
         else:
-            print "ERROR deleting " + "Bug" if type == "B" else "Worklog" +"!"
+            print "ERROR deleting " + branch
 
     def list_branches(self, type):
         cmd = ['git', 'branch', '--list']
@@ -148,9 +154,13 @@ class Repository:
         return self.is_remote_branch(self.current_branch)
 
     # MAIN REPO FUNCTIONS:
-    def checkout(self, data):
-        cmd = ['git', 'checkout', data[0]]
+    def checkout_to_branch(self, branch):
+        cmd = ['git', 'checkout', branch]
         subprocess.call(cmd)
+    
+    def checkout(self, data):
+        branch = data[0]
+        self.checkout_to_branch(branch)
         self.load_current_branch()
 
     def diff(self, data):
@@ -202,11 +212,12 @@ class Repository:
         self.list_branches('w')
         
     def delete_worklog(self, data):
-        self.delete_branch(data, 'w')
+        branch = data[0]
+        self.delete_branch(branch, 'w')
         
     def new_worklog(self, data):
-        data.append('w')
-
+        new_branch = data[0]
+        
         if len(data) == 2:
             parent = data[1]
             if not self.is_remote_branch(parent):
@@ -217,9 +228,9 @@ class Repository:
             if process.returncode != 0:
                 print parent + " does not exist!"
             else:
-                self.new_branch(data)
+                self.new_branch(new_branch, 'w', parent_branch = parent)
         elif self.is_on_remote_branch():
-            self.new_branch(data)
+            self.new_branch(new_branch, 'w')
         else:
             print "Cannot be on local branch to create new Worklog!"
         
@@ -229,11 +240,12 @@ class Repository:
         self.list_branches('b')
         
     def delete_bug(self, data):
-        self.delete_branch(data, 'b')
+        branch = data[0]
+        self.delete_branch(branch, 'b')
         
     def new_bug(self, data):
-        data.append('b')
-
+        new_branch = data[0]
+        
         if len(data) == 2:
             parent = data[1]
             if not self.is_remote_branch(parent):
@@ -244,9 +256,9 @@ class Repository:
             if process.returncode != 0:
                 print parent + " does not exist!"
             else:
-                self.new_branch(data)
+                self.new_branch(new_branch, 'b', parent_branch = parent)
         elif self.is_on_remote_branch():
-            self.new_branch(data)
+            self.new_branch(new_branch, 'b')
         else:
             print "Cannot be on local branch to create new Bug!"
     
