@@ -15,27 +15,26 @@ class Repository:
         cmd = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         cmd.wait()
         return cmd
-            
+
     def __init__(self):
-        db_dir = os.getcwd()
-        self.repo = git.Repo(db_dir)
-        
-        self.repo_path = self.repo.working_dir
-        self.repo_name = self.repo.working_dir.split('/')[-1]
-        self.current_branch = self.repo.head.ref.name
-        
-        db_file_path = self.repo_path + '/' + self.repo_name + '.db'
-        
-        if not os.path.isfile(db_file_path):
-            self.new_repo = True
-        else:
-            self.new_repo = False
-        
+        self.repo = git.Repo(os.getcwd())
+
         self.bug_regex = re.compile('.*[bB][uU][gG].*')
         self.wl_regex = re.compile('.*[wW][lL].*')
-        
-        self.conn = sqlite3.connect(db_file_path)
-    
+
+        self.repo_path = self.repo.working_dir
+        self.repo_name = self.repo.working_dir.split('/')[-1]
+        self.db_file_path = self.repo_path + '/' + self.repo_name + '.db'
+
+        if not os.path.isfile(self.db_file_path):
+            self.git_map = GitMap()
+            new_repo = True
+        else:
+            self.git_map = None
+            new_repo = False
+
+        self.conn = sqlite3.connect(self.db_file_path)
+
         self.conn.execute('''CREATE TABLE IF NOT EXISTS branch (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             NAME CHAR(50),
@@ -43,79 +42,82 @@ class Repository:
             TYPE CHAR(10),
             UNIQUE(NAME)
         );''')
-        
+
         self.conn.commit()
+        self.load_current_branch()
+
+    def calculate_branch_details(self, branch):
+        if not self.git_map:
+            self.git_map = GitMap()
         
-        self.git_map = GitMap()
-        if self.new_repo:
-            self.build_branch_map()
+        ref = next( (x for x in self.git_map.refs if x['ref'].name == branch), None)
+        last_remote_commit = ref['fork']
         
-        self.load_curr_branch_details()
-        
-    def build_branch_map(self):
-        for ref in self.git_map.refs:
-            name = ref['ref'].name
-            last_remote_commit = ref['fork']
-            if self.bug_regex.match(self.current_branch):
-                type = 'b'
-            elif self.wl_regex.match(self.current_branch):
-                type = 'w'
-            else:
-                type = '?'
-            
-            self.register_branch(name, type, last_remote_commit)
-    
-    # ALL BRANCH FUNCTIONALITY
-    def load_curr_branch_details(self):
-        self.branch_data = self.fetch_branch(self.current_branch)
-        if not self.branch_data:
-            print "Did not find Branch Details in DB"
-            data = self.find_branch_details(self.current_branch)
-            if not self.is_on_remote_branch():
-                self.register_branch(data[0], data[1], data[2])
+        if self.bug_regex.match(branch):
+            type = 'b'
+        elif self.wl_regex.match(branch):
+            type = 'w'
         else:
-            print "Found Branch Details in DB"
-            self.last_remote_commit = self.branch_data[2]
-            self.type = self.branch_data[3]
+            type = '?'
+            
+        return {
+            'name': branch,
+            'last_remote_commit': last_remote_commit,
+            'type': type
+        }
+
+    def calculate_current_branch_details(self):
+        current_branch = self.repo.head.ref.name
+        return self.calculate_branch_details(current_branch)
 
     def fetch_branch(self, branch):
         stmt = 'SELECT * FROM branch WHERE NAME = ?'
         cursor = self.conn.execute(stmt, (branch,))
-        return cursor.fetchone()
-        
-    def find_branch_details(self, ref_name):
-        ref = next( (x for x in self.git_map.refs if x['ref'].name == ref_name), None)
-        last_remote_commit = ref['fork']
-        if self.bug_regex.match(self.current_branch):
-            type = 'b'
-        elif self.wl_regex.match(self.current_branch):
-            type = 'w'
+        data = cursor.fetchone()
+
+        if not data:
+            return None
         else:
-            type = '?'
-        
-        return (ref_name, type, last_remote_commit)
-        
+            return {
+                'name': data[1],
+                'last_remote_commit': data[2],
+                'type': data[3]
+            }
+
     def register_branch(self, branch, type, last_remote_commit):
         print "Registering branch " + branch
         stmt = 'INSERT OR IGNORE INTO branch (NAME, LAST_REMOTE_COMMIT, TYPE) VALUES(?, ?, ?)'
         self.conn.execute(stmt, (branch, last_remote_commit, type,))
         self.conn.commit()
-        
+
     def unregister_branch(self, branch, type):
         print "Un-Registering branch " + branch
         stmt = 'DELETE FROM branch WHERE NAME = ? AND TYPE = ?'
         self.conn.execute(stmt, (branch, type,))
         self.conn.commit()
-            
-    def new_branch(self, data):
-        print "Creating new branch " + data[0] + " from " + data[2]
+
+    def load_current_branch(self):
+        self.current_branch = self.repo.head.ref.name
+        data = self.fetch_branch(self.current_branch)
+
+        if not data:
+            data = self.calculate_current_branch_details()
+
+        self.branch_type = data['type']
+        self.last_remote_commit = data['last_remote_commit']
+
+    def new_branch(self, new_branch, parent_branch = None):
+        if not parent_branch:
+            parent_branch = self.current_branch
+
+        print "Creating new branch " + new_branch + " from " + parent_branch
         status = subprocess.call("git checkout -b " + data[0], shell=True)
         if status == 0:
             self.register_branch(data[0], data[1], self.last_remote_commit)
             print "Success"
         else:
             print "ERROR creating new " + "Bug" if type == "B" else "Worklog" +"!"
-        
+
     def delete_branch(self, data, type):
         status = subprocess.call("git branch -d " + data[0], shell=True)
         if status == 0:
@@ -123,28 +125,28 @@ class Repository:
             print "Success"
         else:
             print "ERROR deleting " + "Bug" if type == "B" else "Worklog" +"!"
-        
+
     def list_branches(self, type):
         cmd = ['git', 'branch', '--list']
         if type == 'b':
             cmd.append('*[Bb][uU][gG]*')
         else:
             cmd.append('*[Ww][Ll]*')
-        
+
         data = re.sub(r'[\s\*]+', ' ', self.execute_cmd(cmd))
         for branch in data.split():
-            if self.current_branch == branch:
+            if branch == self.current_branch:
                 print '* ' + branch
             else:
                 print branch
-                
+
     def is_remote_branch(self, branch):
         process = self.new_subprocess(["git", "rev-parse", "--verify", "origin/" + branch])
         return process.returncode == 0
-    
+
     def is_on_remote_branch(self):
         return self.is_remote_branch(self.current_branch)
-        
+
     # MAIN REPO FUNCTIONS:
     def checkout(self, data):
         cmd = ['git', 'checkout', data[0]]
@@ -152,7 +154,10 @@ class Repository:
         self.load_curr_branch_details()
 
     def diff(self, data):
-        cmd = ['git', 'diff', self.last_remote_commit + '..']
+        if not self.last_remote_commit:
+            cmd = ['git', 'diff']
+        else:
+            cmd = ['git', 'diff', self.last_remote_commit + '..']
         subprocess.call(cmd)
         
     def parent(self, data):
@@ -176,14 +181,16 @@ class Repository:
         print "Patch created at: " + patch_file
         
     def changes(self, data):
-        cmd = ['git', 'diff', '--name-status', self.last_remote_commit + '..']
+        if not self.last_remote_commit:
+            cmd = ['git', 'diff', '--name-status']
+        else:
+            cmd = ['git', 'diff', '--name-status', self.last_remote_commit + '..']
         changes = self.execute_cmd(cmd)
         
         for change in sorted(changes.split('/n')):
             print change
         
     # WORKLOG FUNCTIONS:
-    
     def list_worklogs(self, data):
         self.list_branches('w')
         
