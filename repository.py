@@ -11,16 +11,24 @@ class Repository:
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         return process.communicate()[0].strip()
         
-    def new_subprocess(self, cmd):
-        cmd = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        cmd.wait()
-        return cmd
+    def calc_branch_type(self, branch):
+        for type, info in self.branch_regex.items():
+            if info['regex'].search(branch):
+                return type
 
     def __init__(self):
         self.repo = git.Repo(os.getcwd())
-
-        self.bug_regex = re.compile('.*[bB][uU][gG].*')
-        self.wl_regex = re.compile('.*[wW][lL].*')
+        
+        self.branch_regex = {
+            'bug': {
+                'exp': '[bB][uU][gG]',
+                'regex': re.compile('[bB][uU][gG]')
+            },
+            'wl': {
+                'exp': '[wW][lL]',
+                'regex': re.compile('[wW][lL]')
+            }
+        }
 
         self.repo_path = self.repo.working_dir
         self.repo_name = self.repo.working_dir.split('/')[-1]
@@ -69,12 +77,7 @@ class Repository:
         ref = next( (x for x in self.git_map.refs if x['ref'].name == branch), None)
         last_remote_commit = ref['fork']
         
-        if self.bug_regex.match(branch):
-            type = 'b'
-        elif self.wl_regex.match(branch):
-            type = 'w'
-        else:
-            type = '?'
+        type = self.calc_branch_type(branch)
             
         return {
             'name': branch,
@@ -122,65 +125,82 @@ class Repository:
         self.branch_type = data['type']
         self.last_remote_commit = data['last_remote_commit']
 
+    def checkout_to_branch(self, branch):
+        try:
+            info = self.repo.git.checkout(branch)
+            print info
+        except git.exc.GitCommandError, e:
+            print "ERROR: " + str(e)
+            return False
+        return True
+
     def new_branch(self, new_branch, type, parent_branch = None):
         if not parent_branch:
             parent_branch = self.current_branch
-        else:
-            self.checkout_to_branch(parent_branch)
+            
+        if not self.has_upstream_branch(parent_branch):
+            print "Cannot fork local branch from another local branch!"
+            return
+        
+        if not self.checkout_to_branch(parent_branch):
+            print "Unable to checkout to " + parent_branch
+            return
 
         print "Creating new branch " + new_branch + " from " + parent_branch
-        status = subprocess.call("git checkout -b " + new_branch, shell=True)
-        if status == 0:
-            self.register_branch(new_branch, type, self.repo.head.ref.commit.hexsha)
+        last_remote_commit = self.repo.head.ref.commit.hexsha
+        try:
+            self.repo.git.checkout('HEAD', b = new_branch)
+            self.register_branch(new_branch, type, last_remote_commit)
             self.load_current_branch()
-            print "Success"
-        else:
-            print "ERROR creating new " + "Bug" if type == "B" else "Worklog" +"!"
+        except git.exc.GitCommandError, e:
+            print "ERROR: " + str(e)
 
     def delete_branch(self, branch, type):
         if self.current_branch == branch:
             self.checkout_to_branch('master')
-        
-        status = subprocess.call("git branch -D " + branch, shell=True)
-        if status == 0:
+            
+        try:
+            self.repo.git.branch('-D', branch)
             self.unregister_branch(branch, type)
             print "Success"
-        else:
+        except git.exc.GitCommandError, e:
+            print "ERROR: " + str(e)
             print "ERROR deleting " + branch
 
     def list_branches(self, type):
-        cmd = ['git', 'branch', '--list']
-        if type == 'b':
-            cmd.append('*[Bb][uU][gG]*')
-        else:
-            cmd.append('*[Ww][Ll]*')
-
-        data = re.sub(r'[\s\*]+', ' ', self.execute_cmd(cmd))
-        for branch in data.split():
+        branches = filter(lambda y: self.branch_regex[type]['regex'].search(y), map(lambda x: x.name, self.repo.heads))
+        for branch in branches:
             if branch == self.current_branch:
                 print '* ' + branch
             else:
                 print branch
 
-    def is_remote_branch(self, branch):
-        process = self.new_subprocess(["git", "rev-parse", "--verify", "origin/" + branch])
-        return process.returncode == 0
+    def has_upstream_branch(self, branch):
+        for remote in self.repo.remotes:
+            for ref in remote.refs:
+                if ref.name == remote.name + '/' + branch:
+                    return  remote.name + '/' + branch
+        return None
+    
+    def get_upstream_branch(self, branch):
+        return self.repo.head.ref.tracking_branch().name
+    
+    def get_current_upstream_branch(self):
+        return self.get_upstream_branch(self.current_branch)
 
-    def is_on_remote_branch(self):
-        return self.is_remote_branch(self.current_branch)
+    def current_has_upstream_branch(self):
+        return self.has_upstream_branch(self.current_branch)
 
     # MAIN REPO FUNCTIONS:
-    def checkout_to_branch(self, branch):
-        cmd = ['git', 'checkout', branch]
-        subprocess.call(cmd)
-    
     def checkout(self, data):
         branch = data[0]
         self.checkout_to_branch(branch)
         self.load_current_branch()
 
     def diff(self, data):
-        if not self.last_remote_commit:
+        if self.current_has_upstream_branch():
+            cmd = ['git', 'diff', self.get_current_upstream_branch() + ".." + self.current_branch]
+        elif not self.last_remote_commit:
             cmd = ['git', 'diff']
         else:
             cmd = ['git', 'diff', self.last_remote_commit + '..']
@@ -229,56 +249,36 @@ class Repository:
 
     # WORKLOG FUNCTIONS:
     def list_worklogs(self, data):
-        self.list_branches('w')
+        self.list_branches('wl')
         
     def delete_worklog(self, data):
         branch = data[0]
-        self.delete_branch(branch, 'w')
+        self.delete_branch(branch, 'wl')
         
     def new_worklog(self, data):
         new_branch = data[0]
         
         if len(data) == 2:
             parent = data[1]
-            if not self.is_remote_branch(parent):
-                print parent + " is not a remote branch!"
-                return
-            
-            process = self.new_subprocess(['git', 'checkout', parent])
-            if process.returncode != 0:
-                print parent + " does not exist!"
-            else:
-                self.new_branch(new_branch, 'w', parent_branch = parent)
-        elif self.is_on_remote_branch():
-            self.new_branch(new_branch, 'w')
+            self.new_branch(new_branch, 'wl', parent_branch = parent)
         else:
-            print "Cannot be on local branch to create new Worklog!"
+            self.new_branch(new_branch, 'wl')
         
     # BUG FUNCTIONS:
     
     def list_bugs(self, data):
-        self.list_branches('b')
+        self.list_branches('bug')
         
     def delete_bug(self, data):
         branch = data[0]
-        self.delete_branch(branch, 'b')
+        self.delete_branch(branch, 'bug')
         
     def new_bug(self, data):
         new_branch = data[0]
         
         if len(data) == 2:
             parent = data[1]
-            if not self.is_remote_branch(parent):
-                print parent + " is not a remote branch!"
-                return
-            
-            process = self.new_subprocess(['git', 'checkout', parent])
-            if process.returncode != 0:
-                print parent + " does not exist!"
-            else:
-                self.new_branch(new_branch, 'b', parent_branch = parent)
-        elif self.is_on_remote_branch():
-            self.new_branch(new_branch, 'b')
+            self.new_branch(new_branch, 'bug', parent_branch = parent)
         else:
-            print "Cannot be on local branch to create new Bug!"
+            self.new_branch(new_branch, 'bug')
     
