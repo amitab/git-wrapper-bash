@@ -128,7 +128,7 @@ class Repository:
     def checkout_to_branch(self, branch):
         try:
             info = self.repo.git.checkout(branch)
-            print info
+            print "Switched to branch " + branch + "\n" + info
         except git.exc.GitCommandError, e:
             print "ERROR: " + str(e)
             return False
