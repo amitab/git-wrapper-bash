@@ -24,8 +24,11 @@ class GitMap:
         self.make_map()
         
         for ref in self.refs:
-            ref['fork'] = self.dag.find_fork_of_vertex(ref)
-            # print ref['ref'].name + ' -> ' + str(ref['fork'])
+            if ref['ref'].name.find('master') >= 0:
+                ref['fork'] = None
+            else:
+                ref['fork'] = self.dag.find_fork_of_vertex(ref['ref'].commit.hexsha)
+            print ref['ref'].name + ' -> ' + str(ref['fork'])
             if ref['fork'] != None:
                 index = ref['commits'].index(ref['fork']) + 1
                 del ref['commits'][index:]
@@ -43,4 +46,5 @@ class GitMap:
                 self.dag.add_verex({}, commit.hexsha)
                 self.dag.add_edge(commit.hexsha, prev_commit.hexsha)
                 prev_commit = commit
-                
+
+g = GitMap()

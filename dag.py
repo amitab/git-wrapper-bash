@@ -1,37 +1,65 @@
-class GitDAG:
+class Vertex:
+    def __init__(self, key, data):
+        self.data = data
+        self.key = key
+        self.edges = {
+            'in': set(),
+            'out': set()
+        }
+    
+    def add_edge(self, vertex):
+        self.edges['out'].add(vertex)
+        vertex.edges['in'].add(self)
+    
+    def get_parents(self):
+        return self.edges['in']
+    
+    def get_children(self):
+        return self.edges['out']
+        
+    def in_degree(self):
+        return len(self.edges['in'])
+        
+    def out_degree(self):
+        return len(self.edges['out'])
+    
+class VertexSet:
     def __init__(self):
         self.vertices = {}
-        self.edges = {}
-        
-    def add_verex(self, vertex, hash):
-        if not hash in self.vertices:
-            self.vertices[hash] = {
-                'data': vertex,
-                'fork': None
-            }
-            self.edges[hash] = {
-                'in': set(),
-                'out': set()
-            }
     
-    def add_edge(self, hash1, hash2):
-        self.edges[hash1]['out'].add(hash2)
-        self.edges[hash2]['in'].add(hash1)
+    def add_verex(self, key, data):
+        if not self.key_exists(key):
+            self.vertices[key] = Vertex(key, data)
+            
+    def add_edge(self, key1, key2):
+        self.vertices[key1].add_edge(self.vertices[key2])
         
-    def find_fork_of_vertex(self, vertex):
-        if vertex['ref'].name.find('master') >= 0:
-            return None
+    def key_exists(self, key):
+        return key in self.vertices.keys()
         
-        ancestor = vertex['ref'].commit.hexsha
+    def get_vertex(self, key):
+        return self.vertices[key]
+
+class GitDAG:
+    def __init__(self):
+        self.vertices = VertexSet()
+        
+    def add_verex(self, data, key):
+        self.vertices.add_verex(key, data)
+    
+    def add_edge(self, key1, key2):
+        self.vertices.add_edge(key1, key2)
+        
+    def find_fork_of_vertex(self, key):
+        vertex = self.vertices.get_vertex(key)
         while True:
             # print "Examining parent: " + ancestor
-            edge = self.edges[ancestor]
-            if len(edge['out']) > 1:
-                return ancestor
-            elif len(edge['in']) == 0:
+            if vertex.out_degree() > 1:
+                return vertex.key
+            elif vertex.in_degree() == 0:
                 return None
             else:
-                ancestor = iter(edge['in']).next()
+                vertex = iter(vertex.get_parents()).next()
                 
         return fork
         
