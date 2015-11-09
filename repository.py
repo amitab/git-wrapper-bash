@@ -58,10 +58,8 @@ class Repository:
             self.setup_repo_db()
             
     def setup_repo_db(self):
-        for ref in self.git_map.refs:
-            name = ref['ref'].name
+        for name, branch in self.git_map.branches.items():
             data = self.calculate_branch_details(name)
-            
             self.register_branch(name, data['type'], data['last_remote_commit'])
             
     def clean_cache(self):
@@ -70,14 +68,14 @@ class Repository:
         except:
             print "Unable to clean cache. Plox delete manually: " + self.db_file_path
 
-    def calculate_branch_details(self, branch):
+    def calculate_branch_details(self, branch_name):
         if not self.git_map:
             self.git_map = GitMap()
+            
+        branch = self.git_map.branches[branch_name]
+        last_remote_commit = branch.fork
         
-        ref = next( (x for x in self.git_map.refs if x['ref'].name == branch), None)
-        last_remote_commit = ref['fork']
-        
-        type = self.calc_branch_type(branch)
+        type = self.calc_branch_type(branch_name)
             
         return {
             'name': branch,
