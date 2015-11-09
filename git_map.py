@@ -1,17 +1,13 @@
 import os
 import git
+import itertools
 from dag import GitDAG
 
 class Branch:
     def __init__(self, ref):
         self.ref = ref
         self.name = ref.name
-        self.commit_objs = {}
-        self.commits = []
-        
-    def add_commit(self, commit):
-        self.commit_objs[commit.hexsha] = commit
-        self.commits.append(commit.hexsha)
+        self.commits = itertools.chain([ref.commit], ref.commit.iter_parents(first_parent=True))
 
 class GitMap:
     def __init__(self):
@@ -34,18 +30,15 @@ class GitMap:
                 branch.fork = None
             else:
                 branch.fork = self.dag.find_fork_of_vertex(branch.ref.commit.hexsha)
+            # print name + " => " + str(branch.fork)
     
     def make_map(self):
         for name, branch in self.branches.items():
-            prev_commit = branch.ref.commit
-            self.dag.add_verex({}, prev_commit.hexsha)
-            branch.add_commit(prev_commit)
-            commit_gen = branch.ref.commit.iter_parents(first_parent=True)
-            
-            for index, commit in enumerate(commit_gen):
-                branch.add_commit(commit)
+            prev_commit = None
+            for commit in branch.commits:
                 self.dag.add_verex({}, commit.hexsha)
-                self.dag.add_edge(commit.hexsha, prev_commit.hexsha)
+                if prev_commit:
+                    self.dag.add_edge(commit.hexsha, prev_commit.hexsha)
                 prev_commit = commit
 
-g = GitMap()
+# g = GitMap()
