@@ -1,6 +1,7 @@
 import re
 import os
 import git
+from db import DB
 import subprocess
 import sqlite3
 
@@ -32,30 +33,15 @@ class Repository:
 
         self.repo_path = self.repo.working_dir
         self.repo_name = self.repo.working_dir.split('/')[-1]
-        self.db_file_path = os.path.dirname(os.path.realpath(__file__)) + '/' + self.repo_name + '.db'
-
-        if not os.path.isfile(self.db_file_path):
+        self.db = DB(os.path.dirname(os.path.realpath(__file__)) + '/' + self.repo_name + '.db')
+        
+        if self.db.is_new:
             self.git_map = GitMap()
-            new_repo = True
+            self.setup_repo_db()
         else:
             self.git_map = None
-            new_repo = False
-
-        self.conn = sqlite3.connect(self.db_file_path)
-
-        self.conn.execute('''CREATE TABLE IF NOT EXISTS branch (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            NAME CHAR(50),
-            LAST_REMOTE_COMMIT CHAR(50),
-            TYPE CHAR(10),
-            UNIQUE(NAME)
-        );''')
-
-        self.conn.commit()
+            
         self.load_current_branch()
-        
-        if new_repo:
-            self.setup_repo_db()
             
     def setup_repo_db(self):
         for name, branch in self.git_map.branches.items():
@@ -64,7 +50,7 @@ class Repository:
             
     def clean_cache(self):
         try:
-            os.remove(self.db_file_path)
+            self.db.clean
         except:
             print "Unable to clean cache. Plox delete manually: " + self.db_file_path
 
@@ -88,9 +74,7 @@ class Repository:
         return self.calculate_branch_details(current_branch)
 
     def fetch_branch(self, branch):
-        stmt = 'SELECT * FROM branch WHERE NAME = ?'
-        cursor = self.conn.execute(stmt, (branch,))
-        data = cursor.fetchone()
+        data = self.db.fetchone('branch', (branch,))
 
         if not data:
             return None
@@ -103,15 +87,11 @@ class Repository:
 
     def register_branch(self, branch, type, last_remote_commit):
         print "Registering branch " + branch
-        stmt = 'INSERT OR IGNORE INTO branch (NAME, LAST_REMOTE_COMMIT, TYPE) VALUES(?, ?, ?)'
-        self.conn.execute(stmt, (branch, last_remote_commit, type,))
-        self.conn.commit()
+        self.db.insert('branch', (branch, last_remote_commit, type,))
 
     def unregister_branch(self, branch, type):
         print "Un-Registering branch " + branch
-        stmt = 'DELETE FROM branch WHERE NAME = ? AND TYPE = ?'
-        self.conn.execute(stmt, (branch, type,))
-        self.conn.commit()
+        self.db.delete('branch', (branch, type,))
 
     def load_current_branch(self):
         self.current_branch = self.repo.head.ref.name
@@ -196,22 +176,24 @@ class Repository:
         self.load_current_branch()
 
     def diff(self, data):
-        if self.current_has_upstream_branch():
-            cmd = ['git', 'diff', self.get_current_upstream_branch() + ".." + self.current_branch]
-        elif not self.last_remote_commit:
-            cmd = ['git', 'diff']
-        else:
+        if self.last_remote_commit:
             cmd = ['git', 'diff', self.last_remote_commit + '..']
+        elif self.current_has_upstream_branch():
+            cmd = ['git', 'diff', self.get_current_upstream_branch() + ".." + self.current_branch]
+        else:
+            cmd = ['git', 'diff']
         subprocess.call(cmd)
         
     def parent(self, data):
         print self.last_remote_commit
 
     def patch(self, data):
-        if not self.last_remote_commit:
-            cmd = ['git', 'diff']
-        else:
+        if self.last_remote_commit:
             cmd = ['git', 'diff', self.last_remote_commit + '..']
+        elif self.current_has_upstream_branch():
+            cmd = ['git', 'diff', self.get_current_upstream_branch() + ".." + self.current_branch]
+        else:
+            cmd = ['git', 'diff']
         diff = self.execute_cmd(cmd)
         
         if diff == "":
@@ -242,7 +224,6 @@ class Repository:
             print change
     
     def clean(self, data):
-        self.conn.close()
         self.clean_cache()
 
     # WORKLOG FUNCTIONS:
