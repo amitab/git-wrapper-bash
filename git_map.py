@@ -90,9 +90,13 @@ class GitMap:
         for name, branch in self.branches.items():
             prev_commit = None
             for commit in branch.commits:
-                self.dag.add_verex({}, commit.hexsha)
+                if branch.ref.commit.hexsha == commit.hexsha:
+                    self.dag.add_verex(commit.hexsha, ref = branch.name)
+                else:
+                    self.dag.add_verex(commit.hexsha)
                 if prev_commit:
                     self.dag.add_edge(commit.hexsha, prev_commit.hexsha)
                 prev_commit = commit
 
-# g = GitMap()
+g = GitMap()
+g.dag.display()

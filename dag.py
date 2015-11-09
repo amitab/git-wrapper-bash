@@ -1,11 +1,18 @@
 class Vertex:
-    def __init__(self, key, data):
-        self.data = data
+    def __init__(self, key, ref = None):
         self.key = key
         self.edges = {
             'in': set(),
             'out': set()
         }
+        self.refs = []
+        
+        if ref:
+            self.refs.append(ref)
+        
+    def add_ref(self, ref):
+        if ref:
+            self.refs.append(ref)
     
     def add_edge(self, vertex):
         self.edges['out'].add(vertex)
@@ -22,14 +29,19 @@ class Vertex:
         
     def out_degree(self):
         return len(self.edges['out'])
+        
+    def to_string(self):
+        return self.key + " => " + str(self.refs)
     
 class VertexSet:
     def __init__(self):
         self.vertices = {}
     
-    def add_verex(self, key, data):
+    def add_verex(self, key, ref):
         if not self.key_exists(key):
-            self.vertices[key] = Vertex(key, data)
+            self.vertices[key] = Vertex(key, ref)
+        else:
+            self.vertices[key].add_ref(ref)
             
     def add_edge(self, key1, key2):
         self.vertices[key1].add_edge(self.vertices[key2])
@@ -39,13 +51,19 @@ class VertexSet:
         
     def get_vertex(self, key):
         return self.vertices[key]
+        
+    def to_string(self):
+        data = ""
+        for vertex in self.vertices.values():
+            data = data + vertex.to_string() + "\n"
+        return data
 
 class GitDAG:
     def __init__(self):
         self.vertices = VertexSet()
         
-    def add_verex(self, data, key):
-        self.vertices.add_verex(key, data)
+    def add_verex(self, key, ref = None):
+        self.vertices.add_verex(key, ref)
     
     def add_edge(self, key1, key2):
         self.vertices.add_edge(key1, key2)
@@ -64,5 +82,4 @@ class GitDAG:
         return fork
         
     def display(self):
-        print self.vertices.keys()
-        print self.edges
+        print self.vertices.to_string()
