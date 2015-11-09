@@ -57,6 +57,8 @@ class Repository:
     def calculate_branch_details(self, branch_name):
         if not self.git_map:
             self.git_map = GitMap()
+            self.clean_cache()
+            self.setup_repo_db()
             
         branch = self.git_map.branches[branch_name]
         last_remote_commit = branch.fork
