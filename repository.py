@@ -158,7 +158,7 @@ class Repository:
         if self.branch.fork:
             cmd = ['git', 'diff', self.branch.fork + '..']
         elif self.branch.has_upstream_branch:
-            cmd = ['git', 'diff', self.get_upstream_branch_name() + ".." + self.branch.name]
+            cmd = ['git', 'diff', self.branch.get_upstream_branch_name() + ".." + self.branch.name]
         else:
             cmd = ['git', 'diff']
         subprocess.call(cmd)
@@ -170,7 +170,7 @@ class Repository:
         if self.branch.fork:
             cmd = ['git', 'diff', self.branch.fork + '..']
         elif self.branch.has_upstream_branch():
-            cmd = ['git', 'diff', self.get_upstream_branch_name() + ".." + self.branch.name]
+            cmd = ['git', 'diff', self.branch.get_upstream_branch_name() + ".." + self.branch.name]
         else:
             cmd = ['git', 'diff']
         diff = self.execute_cmd(cmd)
@@ -181,7 +181,7 @@ class Repository:
         
         try:
             patch_dir = self.repo_path + '/patches'
-            patch_file = patch_dir + '/' + self.current_branch.split('/')[-1] + '.diff'
+            patch_file = patch_dir + '/' + self.branch.name.split('/')[-1] + '.diff'
             if not os.path.exists(patch_dir):
                 os.makedirs(patch_dir)
             
@@ -210,7 +210,7 @@ class Repository:
         if self.branch.fork:
             cmd = ['git', 'log', self.branch.fork + '..']
         elif self.has_upstream_branch:
-            cmd = ['git', 'log', self.get_upstream_branch_name() + ".." + self.branch.name]
+            cmd = ['git', 'log', self.branch.get_upstream_branch_name() + ".." + self.branch.name]
         else:
             cmd = ['git', 'log']
         subprocess.call(cmd)
