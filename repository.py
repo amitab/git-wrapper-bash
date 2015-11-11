@@ -12,35 +12,18 @@ class Repository:
     def execute_cmd(self, cmd):
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         return process.communicate()[0].strip()
-        
-    def calc_branch_type(self, branch):
-        for type, info in self.branch_regex.items():
-            if info['regex'].search(branch):
-                return type
 
     def __init__(self):
         self.repo = git.Repo(os.getcwd())
-        
-        self.branch_regex = {
-            'bug': {
-                'exp': '[bB][uU][gG]',
-                'regex': re.compile('[bB][uU][gG]')
-            },
-            'wl': {
-                'exp': '[wW][lL]',
-                'regex': re.compile('[wW][lL]')
-            }
-        }
 
         self.repo_path = self.repo.working_dir
         self.repo_name = self.repo.working_dir.split('/')[-1]
         self.db = DB(os.path.dirname(os.path.realpath(__file__)) + '/' + self.repo_name + '.db')
+        self.git_map = GitMap(self.repo)
         
         if self.db.is_new:
-            self.git_map = GitMap()
+            self.git_map.build_branch_map()
             self.setup_repo_db()
-        else:
-            self.git_map = None
             
         self.load_current_branch()
             
@@ -56,11 +39,13 @@ class Repository:
             print "Unable to clean cache. Plox delete manually: " + self.db_file_path
 
     def calculate_branch_details(self, branch_name):
-        if not self.git_map:
-            self.git_map = GitMap()
+        if not self.git_map.map_build:
+            self.git_map.build_branch_map()
             
-        last_remote_commit = self.git_map.branches[branch_name].fork
-        type = self.calc_branch_type(branch_name)
+        branch = self.git_map.branches[branch_name]
+            
+        last_remote_commit = branch.fork
+        type = branch.type
         id = self.register_branch(branch_name, type, last_remote_commit)
             
         return {
@@ -148,12 +133,13 @@ class Repository:
             print "ERROR deleting " + branch
 
     def list_branches(self, type):
-        branches = filter(lambda y: self.branch_regex[type]['regex'].search(y.name), self.repo.heads)
+        branches = filter(lambda y: y.type == type, self.git_map.branches.values())
         for branch in branches:
-            if branch == self.current_branch:
-                print '* ' + branch
-            else:
-                print branch
+            if not branch.is_remote_branch():
+                if branch.name == self.branch.name:
+                    print '* ' + branch.name
+                else:
+                    print branch.name
 
     def has_upstream_branch(self, branch):
         for remote in self.repo.remotes:
@@ -161,15 +147,6 @@ class Repository:
                 if ref.name == remote.name + '/' + branch:
                     return  remote.name + '/' + branch
         return None
-    
-    def get_upstream_branch(self, branch):
-        return self.repo.head.ref.tracking_branch().name
-    
-    def get_current_upstream_branch(self):
-        return self.get_upstream_branch(self.branch.name)
-
-    def current_has_upstream_branch(self):
-        return self.has_upstream_branch(self.branch.name)
 
     # MAIN REPO FUNCTIONS:
     def checkout(self, data):
@@ -180,8 +157,8 @@ class Repository:
     def diff(self, data):
         if self.branch.fork:
             cmd = ['git', 'diff', self.branch.fork + '..']
-        elif self.current_has_upstream_branch():
-            cmd = ['git', 'diff', self.get_current_upstream_branch() + ".." + self.branch.name]
+        elif self.branch.has_upstream_branch:
+            cmd = ['git', 'diff', self.get_upstream_branch_name() + ".." + self.branch.name]
         else:
             cmd = ['git', 'diff']
         subprocess.call(cmd)
@@ -192,8 +169,8 @@ class Repository:
     def patch(self, data):
         if self.branch.fork:
             cmd = ['git', 'diff', self.branch.fork + '..']
-        elif self.current_has_upstream_branch():
-            cmd = ['git', 'diff', self.get_current_upstream_branch() + ".." + self.branch.name]
+        elif self.branch.has_upstream_branch():
+            cmd = ['git', 'diff', self.get_upstream_branch_name() + ".." + self.branch.name]
         else:
             cmd = ['git', 'diff']
         diff = self.execute_cmd(cmd)
@@ -232,8 +209,8 @@ class Repository:
     def history(self, data):
         if self.branch.fork:
             cmd = ['git', 'log', self.branch.fork + '..']
-        elif self.current_has_upstream_branch():
-            cmd = ['git', 'log', self.get_current_upstream_branch() + ".." + self.branch.name]
+        elif self.has_upstream_branch:
+            cmd = ['git', 'log', self.get_upstream_branch_name() + ".." + self.branch.name]
         else:
             cmd = ['git', 'log']
         subprocess.call(cmd)
