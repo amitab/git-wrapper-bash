@@ -27,7 +27,8 @@ main_options = {
     'patch': repo.patch,
     'parent': repo.parent,
     'changes': repo.changes,
-    'clean': repo.clean
+    'clean': repo.clean,
+    'history': repo.history
 }
 
 if(sys.argv[1] == 'bug'):

@@ -8,7 +8,7 @@ function __g() {
 
 	case "$prev" in
 	"g")
-		COMPREPLY=( $(compgen -W "checkout diff parent patch changes bug wl clean" -- $cur) )
+		COMPREPLY=( $(compgen -W "checkout diff parent patch changes bug wl clean history" -- $cur) )
 	;;
 	"bug" | "wl")
 		COMPREPLY=( $(compgen -W "new delete list" -- $cur) )

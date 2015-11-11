@@ -37,7 +37,7 @@ class DB:
         return cursor
     
     def insert(self, table, data):
-        self.execute_query(table, 'insert', data = data)
+        return self.execute_query(table, 'insert', data = data)
     
     def delete(self, table, data):
         self.execute_query(table, 'delete', data = data)

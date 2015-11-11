@@ -4,10 +4,13 @@ import itertools
 from dag import GitDAG
 
 class Branch:
-    def __init__(self, ref):
+    def __init__(self, ref, id = None, type = None, fork = None):
         self.ref = ref
         self.name = ref.name
         self.commits = itertools.chain([ref.commit], ref.commit.iter_parents(first_parent=True))
+        self.id = id
+        self.type = type
+        self.fork = fork
 
 class GitMap:
     def __init__(self):
