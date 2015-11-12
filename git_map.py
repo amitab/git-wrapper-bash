@@ -97,6 +97,3 @@ class GitMap:
                 if prev_commit:
                     self.dag.add_edge(commit.hexsha, prev_commit.hexsha)
                 prev_commit = commit
-
-g = GitMap()
-g.dag.display()

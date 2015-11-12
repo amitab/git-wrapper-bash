@@ -72,7 +72,9 @@ class GitDAG:
         vertex = self.vertices.get_vertex(key)
         while True:
             # print "Examining parent: " + ancestor
-            if vertex.out_degree() > 1:
+            if len(vertex.refs) > 0 and key != vertex.key:
+                return vertex.key
+            elif vertex.out_degree() > 1:
                 return vertex.key
             elif vertex.in_degree() == 0:
                 return None
