@@ -33,7 +33,7 @@ class Repository:
             
     def clean_cache(self):
         try:
-            self.db.clean
+            self.db.clean()
         except:
             print "Unable to clean cache. Plox delete manually: " + self.db_file_path
             
