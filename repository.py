@@ -30,56 +30,50 @@ class Repository:
     def setup_repo_db(self):
         for name, branch in self.git_map.branches.items():
             data = self.calculate_branch_details(name)
-            branch.id = data['id']
             
     def clean_cache(self):
         try:
             self.db.clean
         except:
             print "Unable to clean cache. Plox delete manually: " + self.db_file_path
+            
+    def get_branch_by_name(self, name):
+        if name in self.git_map.branches:
+            return self.git_map.branches[name]
+        else:
+            return None
+            
+    def get_ref_by_name(self, name):
+        if name in self.repo.refs:
+            return self.repo.refs[name]
+        else:
+            return None
 
     def calculate_branch_details(self, branch_name):
         if not self.git_map.map_build:
             self.git_map.build_branch_map()
             
-        branch = self.git_map.branches[branch_name]
-            
-        last_remote_commit = branch.fork
-        type = branch.type
-        id = self.register_branch(branch_name, type, last_remote_commit)
-            
-        return {
-            'id': id,
-            'name': branch_name,
-            'last_remote_commit': last_remote_commit,
-            'type': type
-        }
+        branch = self.get_branch_by_name(branch_name)
+        
+        if branch:
+            branch.register(self.db)
+            return branch
+        else:
+            return None
 
     def calculate_current_branch_details(self):
         current_branch = self.repo.head.ref.name
         return self.calculate_branch_details(current_branch)
 
-    def fetch_branch(self, branch):
-        data = self.db.fetchone('branch', (branch,))
+    def fetch_branch(self, branch_name):
+        data = self.db.fetchone('branch', (branch_name,))
 
         if not data:
             return None
         else:
-            return {
-                'id': data[0],
-                'name': data[1],
-                'last_remote_commit': data[2],
-                'type': data[3]
-            }
-
-    def register_branch(self, branch, type, last_remote_commit):
-        print "Registering branch " + branch
-        resp = self.db.insert('branch', (branch, last_remote_commit, type,))
-        return resp.lastrowid
-
-    def unregister_branch(self, branch, type):
-        print "Un-Registering branch " + branch
-        self.db.delete('branch', (branch, type,))
+            branch = self.get_branch_by_name(branch_name)
+            branch.fork = data[2]
+            return branch
 
     def load_current_branch(self):
         self.current_branch = self.repo.head.ref.name
@@ -88,12 +82,12 @@ class Repository:
         if not data:
             data = self.calculate_current_branch_details()
             
-        self.branch = Branch(self.repo.refs[data['name']], id = data['id'], type = data['type'], fork = data['last_remote_commit'])
+        self.branch = data
 
     def checkout_to_branch(self, branch):
         try:
-            info = self.repo.git.checkout(branch)
-            print "Switched to branch " + branch + "\n" + info
+            info = self.repo.git.checkout(branch.name)
+            print "Switched to branch " + branch.name + "\n" + info
         except git.exc.GitCommandError, e:
             print "ERROR: " + str(e)
             return False
@@ -101,32 +95,31 @@ class Repository:
 
     def new_branch(self, new_branch, type, parent_branch = None):
         if not parent_branch:
-            parent_branch = self.branch.name
+            parent_branch = self.branch
             
-        if not self.has_upstream_branch(parent_branch):
+        if not parent_branch.has_upstream_branch:
             print "Cannot fork local branch from another local branch!"
             return
         
         if not self.checkout_to_branch(parent_branch):
-            print "Unable to checkout to " + parent_branch
+            print "Unable to checkout to " + parent_branch.name
             return
 
-        print "Creating new branch " + new_branch + " from " + parent_branch
-        last_remote_commit = self.branch.ref.commit.hexsha
+        print "Creating new branch " + new_branch + " from " + parent_branch.name
+
         try:
             self.repo.git.checkout('HEAD', b = new_branch)
-            self.register_branch(new_branch, type, last_remote_commit)
             self.load_current_branch()
         except git.exc.GitCommandError, e:
             print "ERROR: " + str(e)
 
     def delete_branch(self, branch, type):
-        if self.branch.name == branch:
-            self.checkout_to_branch('master')
+        if self.branch.name == branch.name:
+            self.checkout_to_branch(self.get_branch_by_name('master'))
             
         try:
-            self.repo.git.branch('-D', branch)
-            self.unregister_branch(branch, type)
+            self.repo.git.branch('-D', branch.name)
+            branch.unregister(self.db)
             print "Success"
         except git.exc.GitCommandError, e:
             print "ERROR: " + str(e)
@@ -141,16 +134,9 @@ class Repository:
                 else:
                     print branch.name
 
-    def has_upstream_branch(self, branch):
-        for remote in self.repo.remotes:
-            for ref in remote.refs:
-                if ref.name == remote.name + '/' + branch:
-                    return  remote.name + '/' + branch
-        return None
-
     # MAIN REPO FUNCTIONS:
     def checkout(self, data):
-        branch = data[0]
+        branch = self.get_branch_by_name(data[0])
         self.checkout_to_branch(branch)
         self.load_current_branch()
 
@@ -169,7 +155,7 @@ class Repository:
     def patch(self, data):
         if self.branch.fork:
             cmd = ['git', 'diff', self.branch.fork + '..']
-        elif self.branch.has_upstream_branch():
+        elif self.branch.has_upstream_branch:
             cmd = ['git', 'diff', self.branch.get_upstream_branch_name() + ".." + self.branch.name]
         else:
             cmd = ['git', 'diff']
@@ -209,7 +195,7 @@ class Repository:
     def history(self, data):
         if self.branch.fork:
             cmd = ['git', 'log', self.branch.fork + '..']
-        elif self.has_upstream_branch:
+        elif self.branch.has_upstream_branch:
             cmd = ['git', 'log', self.branch.get_upstream_branch_name() + ".." + self.branch.name]
         else:
             cmd = ['git', 'log']
@@ -220,14 +206,14 @@ class Repository:
         self.list_branches('wl')
         
     def delete_worklog(self, data):
-        branch = data[0]
+        branch = self.get_branch_by_name(data[0])
         self.delete_branch(branch, 'wl')
         
     def new_worklog(self, data):
-        new_branch = data[0]
+        new_branch = self.get_branch_by_name(data[0])
         
         if len(data) == 2:
-            parent = data[1]
+            parent = self.get_branch_by_name(data[1])
             self.new_branch(new_branch, 'wl', parent_branch = parent)
         else:
             self.new_branch(new_branch, 'wl')
@@ -238,14 +224,14 @@ class Repository:
         self.list_branches('bug')
         
     def delete_bug(self, data):
-        branch = data[0]
+        branch = self.get_branch_by_name(data[0])
         self.delete_branch(branch, 'bug')
         
     def new_bug(self, data):
         new_branch = data[0]
         
         if len(data) == 2:
-            parent = data[1]
+            parent = self.get_branch_by_name(data[1])
             self.new_branch(new_branch, 'bug', parent_branch = parent)
         else:
             self.new_branch(new_branch, 'bug')

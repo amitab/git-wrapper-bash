@@ -51,13 +51,10 @@ class Branch:
             return remote.name
             
     def register(self, db):
-        if not self.fork:
-            print "ERROR: CANNOT REGISTER - FORK UNKNOWN"
-            return
-        
         print "Registering branch " + self.name
         resp = db.insert('branch', (self.name, self.fork, self.type,))
-        return resp.lastrowid
+        self.id = resp.lastrowid
+        return self.id
 
     def unregister(self, db):
         print "Un-Registering branch " + self.name
