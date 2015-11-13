@@ -108,8 +108,10 @@ class Repository:
         print "Creating new branch " + new_branch + " from " + parent_branch.name
 
         try:
+            last_fork_point = self.repo.head.ref.commit.hexsha
             self.repo.git.checkout('HEAD', b = new_branch)
-            self.load_current_branch()
+            self.branch = Branch(self.repo.head.ref, fork = last_fork_point)
+            self.branch.register(self.db)
         except git.exc.GitCommandError, e:
             print "ERROR: " + str(e)
 
@@ -143,8 +145,6 @@ class Repository:
     def diff(self, data):
         if self.branch.fork:
             cmd = ['git', 'diff', self.branch.fork + '..']
-        elif self.branch.has_upstream_branch:
-            cmd = ['git', 'diff', self.branch.get_upstream_branch_name() + ".." + self.branch.name]
         else:
             cmd = ['git', 'diff']
         subprocess.call(cmd)
@@ -155,15 +155,15 @@ class Repository:
     def patch(self, data):
         if self.branch.fork:
             cmd = ['git', 'diff', self.branch.fork + '..']
-        elif self.branch.has_upstream_branch:
-            cmd = ['git', 'diff', self.branch.get_upstream_branch_name() + ".." + self.branch.name]
         else:
-            cmd = ['git', 'diff']
+            print "Unable to create patch!"
+            return
+
         diff = self.execute_cmd(cmd)
         
         if diff == "":
             print "No Diff Bruh"
-            return;
+            return
         
         try:
             patch_dir = self.repo_path + '/patches'
@@ -195,8 +195,6 @@ class Repository:
     def history(self, data):
         if self.branch.fork:
             cmd = ['git', 'log', self.branch.fork + '..']
-        elif self.branch.has_upstream_branch:
-            cmd = ['git', 'log', self.branch.get_upstream_branch_name() + ".." + self.branch.name]
         else:
             cmd = ['git', 'log']
         subprocess.call(cmd)
@@ -214,9 +212,10 @@ class Repository:
         
         if len(data) == 2:
             parent = self.get_branch_by_name(data[1])
-            self.new_branch(new_branch, 'wl', parent_branch = parent)
         else:
-            self.new_branch(new_branch, 'wl')
+            parent = self.get_branch_by_name("master")
+
+        self.new_branch(new_branch, 'wl', parent_branch = parent)
         
     # BUG FUNCTIONS:
     
@@ -232,7 +231,8 @@ class Repository:
         
         if len(data) == 2:
             parent = self.get_branch_by_name(data[1])
-            self.new_branch(new_branch, 'bug', parent_branch = parent)
         else:
-            self.new_branch(new_branch, 'bug')
+            parent = self.get_branch_by_name("master")
+
+        self.new_branch(new_branch, 'bug', parent_branch = parent)
     
