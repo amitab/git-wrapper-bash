@@ -6,9 +6,7 @@ class Vertex:
             'out': set()
         }
         self.refs = []
-        
-        if ref:
-            self.refs.append(ref)
+        self.add_ref(ref)
         
     def add_ref(self, ref):
         if ref:
@@ -32,6 +30,12 @@ class Vertex:
         
     def to_string(self):
         return self.key + " => " + str(self.refs)
+        
+    def is_amibigious(self):
+        if len(self.refs) > 1:
+            return True
+        else:
+            return false
     
 class VertexSet:
     def __init__(self):

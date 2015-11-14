@@ -69,6 +69,20 @@ class GitMap:
         
         self.load_refs()
         
+    def is_safe(self, hexsha):
+        if not self.map_build:
+            self.build_branch_map()
+        
+        vertex = self.get_commit_vertex(hexsha)
+        return not vertex.is_amibigious()
+
+    def get_commit_vertex(self, hexsha):
+        if not self.map_build:
+            self.build_branch_map()
+        
+        vertex = self.vertices.get_vertex(hexsha)
+        return vertex
+        
     def load_refs(self):
         for ref in self.repo.refs:
             if not isinstance(ref, git.TagReference) and ref.name.find('stash') == -1:
