@@ -9,18 +9,6 @@ if status != 0:
 
 repo = Repository()
 
-bug_options = {
-    'new': repo.new_bug,
-    'delete': repo.delete_bug,
-    'list': repo.list_bugs
-}
-
-worklog_options = {
-    'new': repo.new_worklog,
-    'delete': repo.delete_worklog,
-    'list': repo.list_worklogs
-}
-
 main_options = {
     'checkout': repo.checkout,
     'diff': repo.diff,
@@ -28,12 +16,10 @@ main_options = {
     'parent': repo.parent,
     'changes': repo.changes,
     'clean': repo.clean,
-    'history': repo.history
+    'history': repo.history,
+    'new': repo.new_custom,
+    'delete': repo.delete_custom,
+    'list': repo.list_custom
 }
 
-if(sys.argv[1] == 'bug'):
-    bug_options[sys.argv[2]](sys.argv[3:])
-elif(sys.argv[1] == 'wl'):
-    worklog_options[sys.argv[2]](sys.argv[3:])
-else:
-    main_options[sys.argv[1]](sys.argv[2:])
+main_options[sys.argv[1]](sys.argv[2:])

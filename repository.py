@@ -4,6 +4,7 @@ import git
 import subprocess
 import sqlite3
 
+import config
 from db import DB
 from git_map import GitMap
 from git_map import Branch
@@ -15,6 +16,7 @@ class Repository:
 
     def __init__(self):
         self.repo = git.Repo(os.getcwd())
+        self.branch_config = config.branch_types
 
         self.repo_path = self.repo.working_dir
         self.repo_name = self.repo.working_dir.split('/')[-1]
@@ -37,12 +39,6 @@ class Repository:
         except:
             print "Unable to clean cache. Plox delete manually: " + self.db_file_path
             
-    def get_branch_by_name(self, name):
-        if name in self.git_map.branches:
-            return self.git_map.branches[name]
-        else:
-            return None
-            
     def get_ref_by_name(self, name):
         if name in self.repo.refs:
             return self.repo.refs[name]
@@ -53,7 +49,7 @@ class Repository:
         if not self.git_map.map_build:
             self.git_map.build_branch_map()
             
-        branch = self.get_branch_by_name(branch_name)
+        branch = self.git_map.get_branch_by_name(branch_name)
         
         if branch:
             branch.register(self.db)
@@ -71,7 +67,7 @@ class Repository:
         if not data:
             return None
         else:
-            branch = self.get_branch_by_name(branch_name)
+            branch = self.git_map.get_branch_by_name(branch_name)
             branch.fork = data[2]
             return branch
 
@@ -93,52 +89,9 @@ class Repository:
             return False
         return True
 
-    def new_branch(self, new_branch, type, parent_branch = None):
-        if not parent_branch:
-            parent_branch = self.branch
-            
-        if not parent_branch.has_upstream_branch:
-            print "Cannot fork local branch from another local branch!"
-            return
-        
-        if not self.checkout_to_branch(parent_branch):
-            print "Unable to checkout to " + parent_branch.name
-            return
-
-        print "Creating new branch " + new_branch + " from " + parent_branch.name
-
-        try:
-            last_fork_point = self.repo.head.ref.commit.hexsha
-            self.repo.git.checkout('HEAD', b = new_branch)
-            self.branch = Branch(self.repo.head.ref, fork = last_fork_point)
-            self.branch.register(self.db)
-        except git.exc.GitCommandError, e:
-            print "ERROR: " + str(e)
-
-    def delete_branch(self, branch, type):
-        if self.branch.name == branch.name:
-            self.checkout_to_branch(self.get_branch_by_name('master'))
-            
-        try:
-            self.repo.git.branch('-D', branch.name)
-            branch.unregister(self.db)
-            print "Success"
-        except git.exc.GitCommandError, e:
-            print "ERROR: " + str(e)
-            print "ERROR deleting " + branch
-
-    def list_branches(self, type):
-        branches = filter(lambda y: y.type == type, self.git_map.branches.values())
-        for branch in branches:
-            if not branch.is_remote_branch():
-                if branch.name == self.branch.name:
-                    print '* ' + branch.name
-                else:
-                    print branch.name
-
     # MAIN REPO FUNCTIONS:
     def checkout(self, data):
-        branch = self.get_branch_by_name(data[0])
+        branch = self.git_map.get_branch_by_name(data[0])
         self.checkout_to_branch(branch)
         self.load_current_branch()
 
@@ -214,41 +167,79 @@ class Repository:
         else:
             cmd = ['git', 'log']
         subprocess.call(cmd)
+        
+    def new_branch(self, new_branch, type, parent_branch = None):
+        if not parent_branch:
+            parent_branch = self.branch
+            
+        if not parent_branch.has_upstream_branch:
+            print "Cannot fork local branch from another local branch!"
+            return
+        
+        if not self.checkout_to_branch(parent_branch):
+            print "Unable to checkout to " + parent_branch.name
+            return
 
-    # WORKLOG FUNCTIONS:
-    def list_worklogs(self, data):
-        self.list_branches('wl')
+        print "Creating new branch " + new_branch + " from " + parent_branch.name
+
+        try:
+            last_fork_point = self.repo.head.ref.commit.hexsha
+            self.repo.git.checkout('HEAD', b = new_branch)
+            self.branch = Branch(self.repo.head.ref, fork = last_fork_point)
+            self.branch.register(self.db)
+        except git.exc.GitCommandError, e:
+            print "ERROR: " + str(e)
+
+    def delete_branch(self, branch, type):
+        if self.branch.name == branch.name:
+            self.checkout_to_branch(self.git_map.get_branch_by_name('master'))
+            
+        try:
+            self.repo.git.branch('-D', branch.name)
+            branch.unregister(self.db)
+            print "Success"
+        except git.exc.GitCommandError, e:
+            print "ERROR: " + str(e)
+            print "ERROR deleting " + branch
+
+    def list_branches(self, type):
+        branches = filter(lambda y: y.type == type, self.git_map.branches.values())
+        for branch in branches:
+            if not branch.is_remote_branch():
+                if branch.name == self.branch.name:
+                    print '* ' + branch.name
+                else:
+                    print branch.name
+                
+    # Driver functions
+    def new_custom(self, data):
+        type = data[0]
+        if not type in self.branch_config:
+            print "Branch type " + type + " not registered"
+            return
         
-    def delete_worklog(self, data):
-        branch = self.get_branch_by_name(data[0])
-        self.delete_branch(branch, 'wl')
+        new_branch = data[1]
         
-    def new_worklog(self, data):
-        new_branch = self.get_branch_by_name(data[0])
-        
-        if len(data) == 2:
-            parent = self.get_branch_by_name(data[1])
+        if len(data) == 3:
+            parent = self.git_map.get_branch_by_name(data[2])
         else:
-            parent = self.get_branch_by_name("master")
+            parent = self.git_map.get_branch_by_name(self.branch_config[type]['default_parent'])
 
-        self.new_branch(new_branch, 'wl', parent_branch = parent)
+        self.new_branch(new_branch, type, parent_branch = parent)
         
-    # BUG FUNCTIONS:
-    
-    def list_bugs(self, data):
-        self.list_branches('bug')
+    def delete_custom(self, data):
+        type = data[0]
+        if not type in self.branch_config:
+            print "Branch type " + type + " not registered"
+            return
         
-    def delete_bug(self, data):
-        branch = self.get_branch_by_name(data[0])
-        self.delete_branch(branch, 'bug')
+        branch = self.git_map.get_branch_by_name(data[1])
+        self.delete_branch(branch, type)
         
-    def new_bug(self, data):
-        new_branch = data[0]
+    def list_custom(self, data):
+        type = data[0]
+        if not type in self.branch_config:
+            print "Branch type " + type + " not registered"
+            return
         
-        if len(data) == 2:
-            parent = self.get_branch_by_name(data[1])
-        else:
-            parent = self.get_branch_by_name("master")
-
-        self.new_branch(new_branch, 'bug', parent_branch = parent)
-    
+        self.list_branches(type)

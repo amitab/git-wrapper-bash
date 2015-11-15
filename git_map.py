@@ -1,21 +1,13 @@
 import os
 import re
 import git
+import config
 import itertools
 from dag import GitDAG
 
 class Branch:
     def __init__(self, ref, id = None, type = None, fork = None):
-        self.branch_regex = {
-            'bug': {
-                'exp': '[bB][uU][gG]',
-                'regex': re.compile('[bB][uU][gG]')
-            },
-            'wl': {
-                'exp': '[wW][lL]',
-                'regex': re.compile('[wW][lL]')
-            }
-        }
+        self.branch_regex = config.branch_types
 
         self.ref = ref
         self.name = ref.name
@@ -68,6 +60,12 @@ class GitMap:
         self.map_build = False
         
         self.load_refs()
+        
+    def get_branch_by_name(self, name):
+        if name in self.branches:
+            return self.branches[name]
+        else:
+            return None
         
     def is_safe(self, hexsha):
         if not self.map_build:
