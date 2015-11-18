@@ -96,7 +96,7 @@ class Repository:
         self.load_current_branch()
 
     def diff(self, data):
-        if not self.git_map.is_safe():
+        if not self.git_map.is_safe(self.branch.ref.commit.hexsha):
             print "Too many refs at a commit. Unsafe to proceed."
             return
 
@@ -110,7 +110,7 @@ class Repository:
         print self.branch.fork
 
     def patch(self, data):
-        if not self.git_map.is_safe():
+        if not self.git_map.is_safe(self.branch.ref.commit.hexsha):
             print "Too many refs at a commit. Unsafe to proceed."
             return
 
@@ -140,7 +140,7 @@ class Repository:
         print "Patch created at: " + patch_file
         
     def changes(self, data):
-        if not self.git_map.is_safe():
+        if not self.git_map.is_safe(self.branch.ref.commit.hexsha):
             print "Too many refs at a commit. Unsafe to proceed."
             return
 
@@ -158,7 +158,7 @@ class Repository:
         self.clean_cache()
         
     def history(self, data):
-        if not self.git_map.is_safe():
+        if not self.git_map.is_safe(self.branch.ref.commit.hexsha):
             print "Too many refs at a commit. Unsafe to proceed."
             return
 

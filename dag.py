@@ -35,7 +35,7 @@ class Vertex:
         if len(self.refs) > 1:
             return True
         else:
-            return false
+            return False
     
 class VertexSet:
     def __init__(self):
@@ -86,6 +86,10 @@ class GitDAG:
                 vertex = iter(vertex.get_parents()).next()
                 
         return fork
+
+    def get_vertex(self, key):
+        vertex = self.vertices.get_vertex(key)
+        return vertex
         
     def display(self):
         print self.vertices.to_string()

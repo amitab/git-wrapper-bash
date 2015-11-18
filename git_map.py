@@ -78,7 +78,7 @@ class GitMap:
         if not self.map_build:
             self.build_branch_map()
         
-        vertex = self.vertices.get_vertex(hexsha)
+        vertex = self.dag.get_vertex(hexsha)
         return vertex
         
     def load_refs(self):
