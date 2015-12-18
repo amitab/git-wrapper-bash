@@ -52,7 +52,10 @@ class Repository:
         branch = self.git_map.get_branch_by_name(branch_name)
         
         if branch:
-            branch.register(self.db)
+            if self.git_map.is_safe(branch.ref.commit.hexsha):
+                branch.register(self.db)
+            else:
+                print "Too many refs at a commit. Not registering " + branch.name + "."
             return branch
         else:
             return None
@@ -186,7 +189,10 @@ class Repository:
             last_fork_point = self.repo.head.ref.commit.hexsha
             self.repo.git.checkout('HEAD', b = new_branch)
             self.branch = Branch(self.repo.head.ref, fork = last_fork_point)
-            self.branch.register(self.db)
+            if self.git_map.is_safe(self.branch.ref.commit.hexsha):
+                self.branch.register(self.db)
+            else:
+                print "Too many refs at a commit. Not registering " + self.branch.name + "."
         except git.exc.GitCommandError, e:
             print "ERROR: " + str(e)
 
